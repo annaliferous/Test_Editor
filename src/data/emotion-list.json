@@ -1,0 +1,33 @@
+[
+  {
+    "emotion": "love",
+    "word_list": [
+      "affection",
+      "adoration",
+      "fondness",
+      "passion",
+      "devotion",
+      "infatuation",
+      "tenderness",
+      "romance",
+      "attachment",
+      "desire"
+    ]
+  },
+
+  {
+    "emotion": "joy",
+    "word_list": [
+      "happiness",
+      "delight",
+      "elation",
+      "cheerfulness",
+      "contentment",
+      "exhilaration",
+      "bliss",
+      "jubilation",
+      "glee",
+      "ecstasy"
+    ]
+  }
+]

@@ -30,12 +30,52 @@
 /* ---------- Editor pane (left) ---------- */
 
 .editor-pane {
+  position: relative; /* anchor for the overlay */
   background: #1d1e23;
   border: 1px solid #2b2c33;
   border-radius: 10px;
   padding: 4px;
   min-height: 0;
   overflow: hidden;
+}
+
+/* rewrite animation overlay */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.loading-gif {
+  position: absolute;
+  height: auto;
+  object-fit: contain;
+  opacity: 0;
+  animation-name: floatPulse;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes floatPulse {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.8);
+  }
+  15% {
+    opacity: 0.9;
+  }
+  50% {
+    transform: translateY(-14px) scale(1.1);
+  }
+  85% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.8);
+  }
 }
 
 .editor-textarea {
@@ -371,4 +411,52 @@
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
   }
+}
+
+.hint-error {
+  color: #e08765;
+}
+
+.rewrite-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.rewrite-diff {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+.diff-word {
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.diff-equal {
+  color: #ecebe8;
+}
+
+.diff-add {
+  background: rgba(217, 119, 87, 0.25);
+  color: #f2c9b8;
+}
+
+.diff-remove {
+  color: #7d7b73;
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.rewrite-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rewrite-actions .btn {
+  flex: 1;
 }

@@ -26,6 +26,48 @@ console.log("EMOTION_WORD_LISTS:", EMOTION_WORD_LISTS);
 
 let nextId = 0;
 
+function tokenize(text) {
+  return text.trim().split(/\s+/).filter(Boolean);
+}
+
+function diffWords(oldText, newText) {
+  const a = tokenize(oldText);
+  const b = tokenize(newText);
+  const n = a.length;
+  const m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] =
+        a[i] === b[j]
+          ? dp[i + 1][j + 1] + 1
+          : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const result = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      result.push({ type: "equal", text: a[i] });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      result.push({ type: "remove", text: a[i] });
+      i++;
+    } else {
+      result.push({ type: "add", text: b[j] });
+      j++;
+    }
+  }
+  while (i < n) result.push({ type: "remove", text: a[i++] });
+  while (j < m) result.push({ type: "add", text: b[j++] });
+
+  return result;
+}
+
 function App() {
   const [rawText, setRawText] = useState(
     "I felt a deep affection and passion for this project. Also the bliss and happiness made me feel joy",
@@ -37,8 +79,16 @@ function App() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const isSplit = words.length > 0;
 
+  const [mode, setMode] = useState("search"); // "search" | "rewrite"
+  const [pendingRewrite, setPendingRewrite] = useState(null); // { emotion, diff }
+  const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [rewriteError, setRewriteError] = useState(null);
+
   // Handle dragging of animation buttons
   const [dragState, setDragState] = useState(null);
+
+  // used animation
+  const [loadingAnim, setLoadingAnim] = useState(null);
 
   function startGifDrag(e, anim) {
     e.preventDefault(); // stop native drag/text-selection from kicking in
@@ -67,7 +117,7 @@ function App() {
         upEvent.clientY,
       );
       if (dropEl && dropEl.closest(".word-canvas")) {
-        applyAnimation(anim.key);
+        triggerAnimationAction(anim.key);
       }
 
       setDragState(null);
@@ -105,14 +155,6 @@ function App() {
       }
       return next;
     });
-  }
-
-  function selectAll() {
-    setSelectedIds(new Set(words.map((w) => w.id)));
-  }
-
-  function clearSelection() {
-    setSelectedIds(new Set());
   }
 
   // Finds word ids whose text contains (substring, case-insensitive,
@@ -167,9 +209,84 @@ function App() {
     );
   }
 
-  // A button should be usable if there's a manual selection, or if this
-  // animation has a word list that could auto-match something.
+  // Ollama
+  async function requestRewrite(animationKey) {
+    const anim = ANIMATIONS.find((a) => a.key === animationKey);
+    const emotionLabel = anim?.label || animationKey;
+    const originalText = words.map((w) => w.text).join(" ");
+
+    setRewriteLoading(true);
+    setLoadingAnim(anim);
+    setRewriteError(null);
+    setPendingRewrite(null);
+
+    try {
+      const res = await fetch("http://localhost:11434/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "llama3",
+          stream: false,
+          messages: [
+            {
+              role: "system",
+              content:
+                `Rewrite the user's text so it more strongly conveys the emotion "${emotionLabel}". ` +
+                `Preserve the original meaning and roughly the same length/word count. ` +
+                `Respond with ONLY the rewritten text, no preamble, no quotes.`,
+            },
+            { role: "user", content: originalText },
+          ],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Ollama request failed (${res.status})`);
+
+      const data = await res.json();
+      const rewrittenText = data?.message?.content?.trim();
+      if (!rewrittenText) throw new Error("Ollama returned no content");
+
+      const diff = diffWords(originalText, rewrittenText);
+      setPendingRewrite({ emotion: animationKey, diff });
+    } catch (err) {
+      setRewriteError(
+        err.message.includes("fetch")
+          ? "Couldn't reach Ollama at localhost:11434 — is it running with OLLAMA_ORIGINS set?"
+          : err.message,
+      );
+    } finally {
+      setRewriteLoading(false);
+      setLoadingAnim(null);
+    }
+  }
+
+  function acceptRewrite() {
+    if (!pendingRewrite) return;
+    const newWords = pendingRewrite.diff
+      .filter((d) => d.type !== "remove")
+      .map((d) => ({ id: nextId++, text: d.text, animation: null, run: 0 }));
+    setWords(newWords);
+    setSelectedIds(new Set());
+    setPendingRewrite(null);
+  }
+
+  function rejectRewrite() {
+    setPendingRewrite(null);
+  }
+
+  function triggerAnimationAction(animationKey) {
+    if (mode === "rewrite") {
+      requestRewrite(animationKey);
+    } else {
+      applyAnimation(animationKey);
+    }
+  }
+
   function isAnimationDisabled(animationKey) {
+    if (rewriteLoading) return true;
+    if (mode === "rewrite") {
+      return words.length === 0 || !EMOTION_WORD_LISTS[animationKey];
+    }
     if (selectedIds.size > 0) return false;
     return !EMOTION_WORD_LISTS[animationKey];
   }
@@ -185,7 +302,52 @@ function App() {
 
       <main className="layout">
         <section className="editor-pane">
-          {!isSplit ? (
+          {/* Animation overlay during rewrite */}
+          {rewriteLoading && loadingAnim && (
+            <div className="loading-overlay" aria-hidden="true">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <img
+                  key={i}
+                  src={loadingAnim.gif}
+                  alt=""
+                  className="loading-gif"
+                  style={{
+                    left: `${(i * 37) % 100}%`,
+                    top: `${(i * 53) % 100}%`,
+                    width: `${28 + (i % 3) * 14}px`,
+                    animationDelay: `${(i * 0.18).toFixed(2)}s`,
+                    animationDuration: `${1.1 + (i % 3) * 0.25}s`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {/* Ollama rewrite */}
+          {pendingRewrite ? (
+            <div className="rewrite-panel">
+              <div className="rewrite-diff">
+                {pendingRewrite.diff.map((d, idx) => (
+                  <span key={idx} className={`diff-word diff-${d.type}`}>
+                    {d.text}{" "}
+                  </span>
+                ))}
+              </div>
+              <div className="rewrite-actions">
+                <button
+                  className="btn btn-small btn-primary"
+                  onClick={acceptRewrite}
+                >
+                  Accept
+                </button>
+                <button
+                  className="btn btn-small btn-ghost"
+                  onClick={rejectRewrite}
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ) : !isSplit ? (
             <textarea
               className="editor-textarea"
               value={rawText}
@@ -211,6 +373,10 @@ function App() {
               ))}
             </div>
           )}
+          {rewriteLoading && (
+            <p className="hint">Asking Ollama for a rewrite…</p>
+          )}
+          {rewriteError && <p className="hint hint-error">{rewriteError}</p>}
         </section>
 
         <aside className="controls-pane">
@@ -231,17 +397,19 @@ function App() {
               <div className="controls-group">
                 <div className="controls-label">Selection</div>
                 <div className="controls-row">
-                  <button className="btn btn-small" onClick={selectAll}>
-                    Select all
+                  <button
+                    className={`btn btn-small ${mode === "search" ? "btn-active" : ""}`}
+                    onClick={() => setMode("search")}
+                  >
+                    Search
                   </button>
-                  <button className="btn btn-small" onClick={clearSelection}>
-                    Clear
+                  <button
+                    className={`btn btn-small ${mode === "rewrite" ? "btn-active" : ""}`}
+                    onClick={() => setMode("rewrite")}
+                  >
+                    Rewrite
                   </button>
                 </div>
-                <p className="hint">
-                  {selectedIds.size} word{selectedIds.size === 1 ? "" : "s"}{" "}
-                  selected
-                </p>
               </div>
 
               <div className="controls-group">
@@ -252,7 +420,7 @@ function App() {
                       key={anim.key}
                       className="btn btn-animation"
                       disabled={isAnimationDisabled(anim.key)}
-                      onClick={() => applyAnimation(anim.key)}
+                      onClick={() => triggerAnimationAction(anim.key)}
                       title={anim.label}
                       aria-label={anim.label}
                       onPointerDown={(e) => {
@@ -274,13 +442,15 @@ function App() {
                     </button>
                   ))}
                 </div>
-                <button
-                  className="btn btn-small btn-ghost"
-                  disabled={selectedIds.size === 0}
-                  onClick={clearAnimations}
-                >
-                  Remove animation
-                </button>
+                {mode === "search" && (
+                  <button
+                    className="btn btn-small btn-ghost"
+                    disabled={selectedIds.size === 0}
+                    onClick={clearAnimations}
+                  >
+                    Remove animation
+                  </button>
+                )}
               </div>
             </>
           )}

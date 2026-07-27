@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import beatingHeart from "./assets/beating_heart.gif";
 import bouncingBall from "./assets/bouncing_ball.gif";
 import emotionList from "./data/emotion-list.json";
@@ -83,6 +83,87 @@ function App() {
   const [pendingRewrite, setPendingRewrite] = useState(null); // { emotion, diff }
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const [rewriteError, setRewriteError] = useState(null);
+
+  // move words around in the canvas
+  const wordRefs = useRef(new Map());
+  const [draggingWordId, setDraggingWordId] = useState(null);
+  const prevRects = useRef(new Map()); // for FLIP
+
+  function startWordDrag(e, word) {
+    e.preventDefault();
+    setDraggingWordId(word.id);
+
+    function handleMove(moveEvent) {
+      const targetId = findDropTargetId(
+        moveEvent.clientX,
+        moveEvent.clientY,
+        word.id,
+      );
+      if (targetId != null) {
+        reorderWords(word.id, targetId);
+      }
+    }
+
+    function handleUp() {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      setDraggingWordId(null);
+    }
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+  }
+
+  function findDropTargetId(x, y, excludeId) {
+    for (const [id, el] of wordRefs.current) {
+      if (id === excludeId || !el) continue;
+      const rect = el.getBoundingClientRect();
+      if (
+        x >= rect.left &&
+        x <= rect.right &&
+        y >= rect.top &&
+        y <= rect.bottom
+      ) {
+        return id;
+      }
+    }
+    return null;
+  }
+  function reorderWords(draggedId, targetId) {
+    // snapshot current positions before reflow
+    wordRefs.current.forEach((el, id) => {
+      if (el) prevRects.current.set(id, el.getBoundingClientRect());
+    });
+
+    setWords((prev) => {
+      const from = prev.findIndex((w) => w.id === draggedId);
+      const to = prev.findIndex((w) => w.id === targetId);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
+
+  useLayoutEffect(() => {
+    wordRefs.current.forEach((el, id) => {
+      if (!el) return;
+      const prev = prevRects.current.get(id);
+      if (!prev) return;
+      const next = el.getBoundingClientRect();
+      const dx = prev.left - next.left;
+      const dy = prev.top - next.top;
+      if (dx || dy) {
+        el.style.transition = "none";
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        requestAnimationFrame(() => {
+          el.style.transition = "transform 0.25s ease";
+          el.style.transform = "";
+        });
+      }
+    });
+  }, [words]);
 
   // Handle dragging of animation buttons
   const [dragState, setDragState] = useState(null);
@@ -433,14 +514,20 @@ function App() {
               {words.map((word) => (
                 <div
                   key={`${word.id}-${word.run}`}
+                  ref={(el) => {
+                    if (el) wordRefs.current.set(word.id, el);
+                    else wordRefs.current.delete(word.id);
+                  }}
                   className={[
                     "word",
                     word.animation ? `anim-${word.animation}` : "",
                     selectedIds.has(word.id) ? "word-selected" : "",
+                    draggingWordId === word.id ? "word-dragging" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
                   onClick={() => toggleWord(word.id)}
+                  onPointerDown={(e) => startWordDrag(e, word)}
                 >
                   {word.text}
                 </div>

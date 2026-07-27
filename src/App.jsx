@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import beatingHeart from "./assets/beating_heart.gif";
 import bouncingBall from "./assets/bouncing_ball.gif";
 import emotionList from "./data/emotion-list.json";
@@ -89,6 +89,72 @@ function App() {
 
   // used animation
   const [loadingAnim, setLoadingAnim] = useState(null);
+
+  // intensity of emotions
+  const [intensity, setIntensity] = useState({ joy: 50, love: 50 }); // 0–100
+  // higher intensity = faster (shorter) animation duration
+  function intensityToDuration(value, minSec, maxSec) {
+    const t = value / 100;
+    return (maxSec - t * (maxSec - minSec)).toFixed(2);
+  }
+
+  // FramePlayer to animation single frames
+  function FramePlayer({ frames, intervalMs, className, alt }) {
+    const [frameIndex, setFrameIndex] = useState(0);
+
+    useEffect(() => {
+      if (!frames || frames.length === 0) return;
+      const id = setInterval(() => {
+        setFrameIndex((i) => (i + 1) % frames.length);
+      }, intervalMs);
+      return () => clearInterval(id);
+    }, [frames, intervalMs]);
+
+    if (!frames || frames.length === 0) return null;
+    return (
+      <img
+        src={frames[frameIndex]}
+        alt={alt}
+        className={className}
+        draggable={false}
+      />
+    );
+  }
+
+  const loveFramesRaw = import.meta.glob("./assets/love/*.png", {
+    eager: true,
+    import: "default",
+  });
+  const joyFramesRaw = import.meta.glob("./assets/joy/*.png", {
+    eager: true,
+    import: "default",
+  });
+
+  function sortedFrames(rawGlob) {
+    return Object.keys(rawGlob)
+      .sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+      )
+      .map((k) => rawGlob[k]);
+  }
+
+  const FRAMES = {
+    love: sortedFrames(loveFramesRaw),
+    joy: sortedFrames(joyFramesRaw),
+  };
+
+  function intensityToFrameInterval(value, minMs, maxMs) {
+    const t = value / 100;
+    return Math.round(maxMs - t * (maxMs - minMs));
+  }
+
+  function intensityToDescriptor(value) {
+    if (value < 20) return "very subtly, barely noticeable";
+    if (value < 40) return "mildly";
+    if (value < 60) return "moderately";
+    if (value < 80) return "strongly";
+    return "extremely intensely, unmistakably";
+  }
 
   function startGifDrag(e, anim) {
     e.preventDefault(); // stop native drag/text-selection from kicking in
@@ -213,6 +279,8 @@ function App() {
   async function requestRewrite(animationKey) {
     const anim = ANIMATIONS.find((a) => a.key === animationKey);
     const emotionLabel = anim?.label || animationKey;
+    const level = intensity[animationKey] ?? 50;
+    const descriptor = intensityToDescriptor(level);
     const originalText = words.map((w) => w.text).join(" ");
 
     setRewriteLoading(true);
@@ -231,7 +299,7 @@ function App() {
             {
               role: "system",
               content:
-                `Rewrite the user's text so it more strongly conveys the emotion "${emotionLabel}". ` +
+                `Rewrite the user's text so it more strongly conveys the emotion "${emotionLabel}" ${descriptor} (intensity ${level}/100). ` +
                 `Preserve the original meaning and roughly the same length/word count. ` +
                 `Respond with ONLY the rewritten text, no preamble, no quotes.`,
             },
@@ -355,7 +423,13 @@ function App() {
               placeholder="Start typing..."
             />
           ) : (
-            <div className="word-canvas">
+            <div
+              className="word-canvas"
+              style={{
+                "--joy-duration": `${intensityToDuration(intensity.joy, 0.35, 1.1)}s`,
+                "--love-duration": `${intensityToDuration(intensity.love, 0.5, 2)}s`,
+              }}
+            >
               {words.map((word) => (
                 <div
                   key={`${word.id}-${word.run}`}
@@ -416,30 +490,50 @@ function App() {
                 <div className="controls-label">Animations</div>
                 <div className="animation-grid">
                   {ANIMATIONS.map((anim) => (
-                    <button
-                      key={anim.key}
-                      className="btn btn-animation"
-                      disabled={isAnimationDisabled(anim.key)}
-                      onClick={() => triggerAnimationAction(anim.key)}
-                      title={anim.label}
-                      aria-label={anim.label}
-                      onPointerDown={(e) => {
-                        if (anim.gif && !isAnimationDisabled(anim.key)) {
-                          startGifDrag(e, anim);
+                    <div key={anim.key} className="animation-cell">
+                      <button
+                        className="btn btn-animation"
+                        disabled={isAnimationDisabled(anim.key)}
+                        onClick={() => triggerAnimationAction(anim.key)}
+                        title={anim.label}
+                        aria-label={anim.label}
+                        onPointerDown={(e) => {
+                          if (anim.gif && !isAnimationDisabled(anim.key)) {
+                            startGifDrag(e, anim);
+                          }
+                        }}
+                        onDragStart={(e) => e.preventDefault()}
+                      >
+                        {anim.gif ? (
+                          <FramePlayer
+                            frames={FRAMES[anim.key]}
+                            intervalMs={intensityToFrameInterval(
+                              intensity[anim.key] ?? 50,
+                              40,
+                              220,
+                            )}
+                            className="btn-animation-gif"
+                            alt={anim.label}
+                          />
+                        ) : (
+                          anim.label
+                        )}
+                      </button>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={intensity[anim.key] ?? 50}
+                        onChange={(e) =>
+                          setIntensity((prev) => ({
+                            ...prev,
+                            [anim.key]: Number(e.target.value),
+                          }))
                         }
-                      }}
-                    >
-                      {anim.gif ? (
-                        <img
-                          className="btn-animation-gif"
-                          src={anim.gif}
-                          alt={anim.label}
-                          draggable={false}
-                        />
-                      ) : (
-                        anim.label
-                      )}
-                    </button>
+                        className="intensity-slider"
+                        aria-label={`${anim.label} intensity`}
+                      />
+                    </div>
                   ))}
                 </div>
                 {mode === "search" && (

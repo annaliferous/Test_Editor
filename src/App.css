@@ -152,6 +152,11 @@
   background: #d97757;
   border-color: #d97757;
   color: #1a1a1a;
+  font-weight: 600;
+}
+.btn-active:hover:not(:disabled) {
+  background: #e08765;
+  border-color: #e08765;
 }
 
 /* ---------- Controls pane (right) ---------- */
@@ -267,6 +272,18 @@
   background: transparent;
 }
 
+.animation-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.intensity-slider {
+  width: 100%;
+  accent-color: #d97757;
+}
+
 /* ---------- Word animations ---------- */
 /* Each class runs once when applied (the div is remounted via `key`) */
 
@@ -314,7 +331,10 @@
   }
 }
 .anim-joy {
-  animation: joy 0.7s ease-in-out infinite;
+  animation-name: joy;
+  animation-duration: var(--joy-duration, 0.7s);
+  animation: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
 @keyframes shake {
@@ -401,7 +421,10 @@
   }
 }
 .anim-love {
-  animation: love 1.2s ease-in-out infinite;
+  animation-name: love;
+  animation-duration: var(--love-duration, 1.2s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
 /* ---------- Responsive ---------- */

@@ -2,6 +2,7 @@ import FramePlayer from "./FramePlayer";
 import { ANIMATIONS } from "../data/animations";
 import { FRAMES } from "../utils/frames";
 import { intensityToFrameInterval } from "../utils/animationMath";
+import quillIcon from "../assets/quill.png";
 
 // Right sidebar: mode switch (Search/Rewrite), scope switch (Local/Global),
 // and the animation buttons with their intensity sliders.
@@ -17,6 +18,9 @@ export default function ControlsPane({
   onStartGifDrag,
   selectedIds,
   onClearAnimations,
+  refactorArmed,
+  refactorLoading,
+  onToggleRefactorArm,
 }) {
   return (
     <aside className="controls-pane">
@@ -64,7 +68,13 @@ export default function ControlsPane({
               <button
                 className="btn btn-animation"
                 disabled={isAnimationDisabled(anim.key)}
-                onClick={() => onTriggerAnimation(anim.key)}
+                onClick={() => {
+                  // In Rewrite mode, clicking should not fire the Ollama
+                  // rewrite immediately — only dragging the gif and
+                  // dropping it into the text does. Search mode still
+                  // applies on click, same as always.
+                  if (mode === "search") onTriggerAnimation(anim.key);
+                }}
                 title={anim.label}
                 aria-label={anim.label}
                 onPointerDown={(e) => {
@@ -105,15 +115,36 @@ export default function ControlsPane({
             </div>
           ))}
         </div>
-        {mode === "search" && (
-          <button
-            className="btn btn-small btn-ghost"
-            disabled={selectedIds.size === 0}
-            onClick={onClearAnimations}
-          >
-            Remove animation
-          </button>
-        )}
+
+        <div className="controls-group">
+          <div className="controls-label">Refactor</div>
+          <div className="animation-grid">
+            <div className="animation-cell">
+              <button
+                className={`btn btn-animation btn-refactor ${refactorArmed ? "btn-active" : ""}`}
+                disabled={mode !== "rewrite" || refactorLoading}
+                onClick={onToggleRefactorArm}
+                title="Select text to refactor"
+                aria-label="Toggle refactor tool"
+                onDragStart={(e) => e.preventDefault()}
+              >
+                <img
+                  src={quillIcon}
+                  alt=""
+                  className="btn-animation-icon"
+                  draggable={false}
+                />
+              </button>
+            </div>
+          </div>
+          {mode !== "rewrite" ? (
+            <p className="hint">Switch to Rewrite to use Refactor.</p>
+          ) : (
+            refactorArmed && (
+              <p className="hint">Select text in the editor to refactor it.</p>
+            )
+          )}
+        </div>
       </div>
     </aside>
   );

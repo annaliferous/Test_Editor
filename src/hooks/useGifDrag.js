@@ -28,7 +28,7 @@ export function useGifDrag(onDrop) {
         upEvent.clientX,
         upEvent.clientY,
       );
-      if (dropEl && dropEl.closest(".word-canvas")) {
+      if (dropEl && dropEl.closest(".editor-pane")) {
         onDrop(anim.key);
       }
       setDragState(null);

@@ -254,6 +254,10 @@ body {
   color: var(--text-faint);
 }
 
+.editor-textarea-quill {
+  cursor: url("./assets/quill.png") 4 60, text;
+}
+
 .word-canvas {
   height: 100%;
   overflow-y: auto;
@@ -322,6 +326,75 @@ body {
 .controls-row {
   display: flex;
   gap: 8px;
+}
+
+.btn-animation-icon {
+  width: 56%;
+  height: 56%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.refactor-popup {
+  position: absolute;
+  z-index: 5;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+}
+
+.refactor-popup-above {
+  transform: translate(-50%, calc(-100% - 10px));
+}
+
+.refactor-popup-below {
+  transform: translate(-50%, 10px);
+}
+
+.refactor-popup::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-panel);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.refactor-popup-above::after {
+  bottom: -5px;
+  border-right: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.refactor-popup-below::after {
+  top: -5px;
+  border-left: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+}
+
+.refactor-popup-input {
+  width: 240px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: #fff;
+  outline: none;
+}
+
+.refactor-popup-input:focus {
+  border-color: var(--accent);
+}
+
+.refactor-popup-input::placeholder {
+  color: var(--text-faint);
 }
 
 .hint {
@@ -415,6 +488,12 @@ body {
 
 .btn-mode-rewrite.btn-active:hover:not(:disabled) {
   background: rgba(138, 92, 214, 0.18);
+}
+
+.btn-refactor.btn-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .btn-animation {

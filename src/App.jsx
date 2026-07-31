@@ -9,6 +9,7 @@ import { intensityToDuration } from "./utils/animationMath";
 import { usePageDrag } from "./hooks/usePageDrag";
 import { useGifDrag } from "./hooks/useGifDrag";
 import { useRewrite } from "./hooks/useRewrite";
+import { useRefactor } from "./hooks/useRefactor";
 
 import PagesRail from "./components/PagesRail";
 import EditorPane from "./components/EditorPane";
@@ -30,6 +31,14 @@ function App() {
   const [mode, setMode] = useState("rewrite"); // "rewrite" (free text) | "search" (word selection)
   const isSearchMode = mode === "search";
   const [intensity, setIntensity] = useState({ joy: 50, love: 50 });
+  // Range selected in the Rewrite-mode textarea, for the Refactor flow:
+  // { start, end, text }, relative to currentPage.rawText. Null when nothing
+  // is selected.
+  const [selection, setSelection] = useState(null);
+  // Whether the Refactor tool is "armed": only while armed does selecting
+  // text in the textarea show the quill cursor and pop up the instruction
+  // prompt. Toggled by clicking the quill button.
+  const [refactorArmed, setRefactorArmed] = useState(false);
 
   // Split a page's rawText into selectable words the first time it's
   // needed in Search mode (either the current page, or every page when
@@ -59,6 +68,9 @@ function App() {
   }, [mode, scope, currentPageId]);
 
   function switchMode(newMode) {
+    setSelection(null);
+    setPendingRefactor(null);
+    setRefactorArmed(false);
     if (newMode === "search") {
       // Split current page into words if it isn't already
       setCurrentPageWords((prevWords) => {
@@ -108,6 +120,9 @@ function App() {
     setCurrentPageId(pageId);
     setSelectedIds(new Set());
     setPendingRewrite(null);
+    setPendingRefactor(null);
+    setSelection(null);
+    setRefactorArmed(false);
   }
 
   function addPage() {
@@ -230,9 +245,45 @@ function App() {
     setSelectedIds,
   });
 
+  // Ollama-backed refactor flow: rewrite a user-selected range of the
+  // current page's text, guided by a typed instruction.
+  const {
+    refactorPrompt,
+    setRefactorPrompt,
+    pendingRefactor,
+    refactorLoading,
+    refactorError,
+    requestRefactor,
+    acceptRefactor,
+    rejectRefactor,
+    setPendingRefactor,
+  } = useRefactor({
+    pages,
+    setPages,
+    currentPage,
+    currentPageId,
+    scope,
+    selection,
+    setSelection,
+  });
+
   function triggerAnimationAction(animationKey) {
     if (mode === "rewrite") requestRewrite(animationKey);
     else applyAnimation(animationKey);
+  }
+
+  function toggleRefactorArm() {
+    setRefactorArmed((armed) => !armed);
+  }
+
+  function submitRefactor() {
+    requestRefactor();
+    setRefactorArmed(false);
+  }
+
+  function cancelRefactorSelection() {
+    setSelection(null);
+    setRefactorArmed(false);
   }
 
   function isAnimationDisabled(animationKey) {
@@ -291,6 +342,18 @@ function App() {
           onToggleWord={toggleWord}
           onChangeText={updateCurrentPageText}
           rewriteError={rewriteError}
+          selection={selection}
+          onSelectionChange={setSelection}
+          refactorArmed={refactorArmed}
+          onCancelRefactor={cancelRefactorSelection}
+          refactorPrompt={refactorPrompt}
+          onSetRefactorPrompt={setRefactorPrompt}
+          pendingRefactor={pendingRefactor}
+          refactorLoading={refactorLoading}
+          refactorError={refactorError}
+          onRequestRefactor={submitRefactor}
+          onAcceptRefactor={acceptRefactor}
+          onRejectRefactor={rejectRefactor}
         />
 
         <ControlsPane
@@ -301,6 +364,9 @@ function App() {
           intensity={intensity}
           onSetIntensity={setIntensity}
           isAnimationDisabled={isAnimationDisabled}
+          refactorArmed={refactorArmed}
+          refactorLoading={refactorLoading}
+          onToggleRefactorArm={toggleRefactorArm}
           onTriggerAnimation={triggerAnimationAction}
           onStartGifDrag={startGifDrag}
           selectedIds={selectedIds}

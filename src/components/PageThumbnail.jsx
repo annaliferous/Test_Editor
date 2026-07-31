@@ -7,6 +7,8 @@ export default function PageThumbnail({
   isActive,
   isDragging,
   isRewriting,
+  isRippling,
+  rippleDelay,
   loadingAnim,
   intensity,
   intensityToDuration,
@@ -23,9 +25,11 @@ export default function PageThumbnail({
         "page-thumb",
         isActive ? "page-thumb-active" : "",
         isDragging ? "page-thumb-dragging" : "",
+        isRippling ? "page-thumb-rippling" : "",
       ]
         .filter(Boolean)
         .join(" ")}
+      style={isRippling ? { "--ripple-delay": `${rippleDelay}s` } : undefined}
       onPointerDown={onPointerDown}
       onClick={onClick}
     >

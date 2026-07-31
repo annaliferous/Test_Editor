@@ -1,4 +1,10 @@
 import { useRef, useState } from "react";
+import { tokenize } from "../utils/wordDiff";
+
+// Stagger step (seconds) between adjacent words in the ripple; the wave
+// radiates outward from the middle of the text, like a stone dropped in
+// the center of a pond.
+const RIPPLE_WORD_STEP = 0.05;
 
 // Center panel. Shows one of three things for the current page:
 //  - a pending rewrite's diff, with accept/reject actions
@@ -82,6 +88,12 @@ export default function EditorPane({
     !pendingRewrite &&
     !refactorLoading &&
     !rewriteLoading;
+
+  // While the AI is evaluating a prompt (either flow), show the text as a
+  // ripple of words instead of the plain textarea/word-canvas.
+  const isAiLoading = rewriteLoading || refactorLoading;
+  const rippleWords = isAiLoading ? tokenize(currentPage.rawText) : [];
+  const rippleOrigin = (rippleWords.length - 1) / 2;
 
   return (
     <section className="editor-pane" ref={editorPaneRef}>
@@ -196,6 +208,20 @@ export default function EditorPane({
               Reject
             </button>
           </div>
+        </div>
+      ) : isAiLoading ? (
+        <div className="ripple-canvas" aria-hidden="true">
+          {rippleWords.map((word, idx) => (
+            <span
+              key={idx}
+              className="ripple-word"
+              style={{
+                "--ripple-delay": `${Math.abs(idx - rippleOrigin) * RIPPLE_WORD_STEP}s`,
+              }}
+            >
+              {word}
+            </span>
+          ))}
         </div>
       ) : isSearchMode ? (
         <div

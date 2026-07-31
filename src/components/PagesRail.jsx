@@ -1,5 +1,11 @@
 import PageThumbnail from "./PageThumbnail";
 
+// Base delay (seconds) before the ripple reaches the first page thumbnail,
+// and the step between each subsequent one — a continuation of the wave
+// that starts in the main editor's text.
+const RIPPLE_PAGE_BASE_DELAY = 0.5;
+const RIPPLE_PAGE_STEP = 0.12;
+
 // Left sidebar: list of page thumbnails (reorderable by drag) plus the
 // "add page" button.
 export default function PagesRail({
@@ -7,6 +13,7 @@ export default function PagesRail({
   currentPageId,
   draggingPageId,
   rewritingPageIds,
+  rippleActive,
   loadingAnim,
   intensity,
   intensityToDuration,
@@ -28,6 +35,8 @@ export default function PagesRail({
             isActive={page.id === currentPageId}
             isDragging={draggingPageId === page.id}
             isRewriting={rewritingPageIds.has(page.id)}
+            isRippling={rippleActive}
+            rippleDelay={RIPPLE_PAGE_BASE_DELAY + idx * RIPPLE_PAGE_STEP}
             loadingAnim={loadingAnim}
             intensity={intensity}
             intensityToDuration={intensityToDuration}

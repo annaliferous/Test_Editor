@@ -315,6 +315,7 @@ function App() {
           currentPageId={currentPageId}
           draggingPageId={draggingPageId}
           rewritingPageIds={rewritingPageIds}
+          rippleActive={scope === "global" && (rewriteLoading || refactorLoading)}
           loadingAnim={loadingAnim}
           intensity={intensity}
           intensityToDuration={intensityToDuration}

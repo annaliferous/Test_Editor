@@ -1,6 +1,16 @@
+import { tokenize } from "../utils/wordDiff";
+
+// Total time (seconds) the words *within* one thumbnail's own ripple spread
+// across, regardless of how many words it has. Kept well under the gap
+// between thumbnails (see PagesRail's RIPPLE_PAGE_STEP) so a long page's
+// internal spread doesn't blur into the next thumbnail's ripple and mask
+// the page-to-page cascade.
+const RIPPLE_WORD_SPREAD = 0.2;
+
 // Thumbnail shown in the left rail for a single page: renders a mini
-// preview (animated words or raw text), the page number, a delete button,
-// and a loading overlay while a rewrite is in flight for this page.
+// preview (animated words, a ripple while the AI is thinking, an AI diff
+// preview once one is ready, or raw text), the page number, a delete
+// button, and a loading overlay while a rewrite is in flight for this page.
 export default function PageThumbnail({
   page,
   pageNumber,
@@ -9,6 +19,9 @@ export default function PageThumbnail({
   isRewriting,
   isRippling,
   rippleDelay,
+  isBarsRippling,
+  registerBarsCanvas,
+  pendingDiff,
   loadingAnim,
   intensity,
   intensityToDuration,
@@ -18,6 +31,11 @@ export default function PageThumbnail({
   onDelete,
   canDelete,
 }) {
+  const rippleWords = isRippling && !pendingDiff ? tokenize(page.rawText) : [];
+  const rippleOrigin = (rippleWords.length - 1) / 2;
+  const rippleWordStep =
+    rippleOrigin > 0 ? RIPPLE_WORD_SPREAD / rippleOrigin : 0;
+
   return (
     <div
       ref={innerRef}
@@ -25,11 +43,9 @@ export default function PageThumbnail({
         "page-thumb",
         isActive ? "page-thumb-active" : "",
         isDragging ? "page-thumb-dragging" : "",
-        isRippling ? "page-thumb-rippling" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      style={isRippling ? { "--ripple-delay": `${rippleDelay}s` } : undefined}
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
@@ -56,7 +72,29 @@ export default function PageThumbnail({
             ))}
           </div>
         )}
-        {page.words.length > 0 ? (
+        {pendingDiff ? (
+          <div className="page-thumb-diff">
+            {pendingDiff.map((d, idx) => (
+              <span key={idx} className={`diff-word diff-${d.type}`}>
+                {d.text}{" "}
+              </span>
+            ))}
+          </div>
+        ) : rippleWords.length > 0 ? (
+          <div className="page-thumb-ripple-canvas">
+            {rippleWords.map((word, idx) => (
+              <span
+                key={idx}
+                className="thumb-ripple-word"
+                style={{
+                  "--ripple-delay": `${rippleDelay + Math.abs(idx - rippleOrigin) * rippleWordStep}s`,
+                }}
+              >
+                {word}
+              </span>
+            ))}
+          </div>
+        ) : page.words.length > 0 ? (
           <div
             className="page-thumb-canvas"
             style={{
@@ -81,6 +119,13 @@ export default function PageThumbnail({
               <span className="page-thumb-empty">Empty page</span>
             )}
           </div>
+        )}
+        {isBarsRippling && !pendingDiff && (
+          <canvas
+            className="page-thumb-bars-canvas page-thumb-bars-overlay"
+            ref={(el) => registerBarsCanvas(page.id, el)}
+            aria-hidden="true"
+          />
         )}
       </div>
       <div className="page-thumb-footer">

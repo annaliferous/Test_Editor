@@ -18,7 +18,7 @@ export default function ControlsPane({
   onStartGifDrag,
   selectedIds,
   onClearAnimations,
-  refactorArmed,
+  refactorTool,
   refactorLoading,
   onToggleRefactorArm,
 }) {
@@ -121,11 +121,28 @@ export default function ControlsPane({
           <div className="animation-grid">
             <div className="animation-cell">
               <button
-                className={`btn btn-animation btn-refactor ${refactorArmed ? "btn-active" : ""}`}
+                className={`btn btn-animation btn-refactor ${refactorTool === "ripple" ? "btn-active" : ""}`}
                 disabled={mode !== "rewrite" || refactorLoading}
-                onClick={onToggleRefactorArm}
-                title="Select text to refactor"
-                aria-label="Toggle refactor tool"
+                onClick={() => onToggleRefactorArm("ripple")}
+                title="Select text to refactor (ripple effect)"
+                aria-label="Toggle refactor tool (ripple effect)"
+                onDragStart={(e) => e.preventDefault()}
+              >
+                <img
+                  src={quillIcon}
+                  alt=""
+                  className="btn-animation-icon"
+                  draggable={false}
+                />
+              </button>
+            </div>
+            <div className="animation-cell">
+              <button
+                className={`btn btn-animation btn-refactor ${refactorTool === "bars" ? "btn-active" : ""}`}
+                disabled={mode !== "rewrite" || refactorLoading}
+                onClick={() => onToggleRefactorArm("bars")}
+                title="Select text to refactor (bars effect)"
+                aria-label="Toggle refactor tool (bars effect)"
                 onDragStart={(e) => e.preventDefault()}
               >
                 <img
@@ -140,7 +157,7 @@ export default function ControlsPane({
           {mode !== "rewrite" ? (
             <p className="hint">Switch to Rewrite to use Refactor.</p>
           ) : (
-            refactorArmed && (
+            refactorTool && (
               <p className="hint">Select text in the editor to refactor it.</p>
             )
           )}

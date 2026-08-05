@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { tokenize } from "../utils/wordDiff";
+import BarsCanvas from "./BarsCanvas";
 
 // Stagger step (seconds) between adjacent words in the ripple; the wave
 // radiates outward from the middle of the text, like a stone dropped in
@@ -29,6 +30,7 @@ export default function EditorPane({
   selection,
   onSelectionChange,
   refactorArmed,
+  refactorAnimStyle,
   onCancelRefactor,
   refactorPrompt,
   onSetRefactorPrompt,
@@ -90,9 +92,13 @@ export default function EditorPane({
     !rewriteLoading;
 
   // While the AI is evaluating a prompt (either flow), show the text as a
-  // ripple of words instead of the plain textarea/word-canvas.
+  // ripple of words instead of the plain textarea/word-canvas — unless the
+  // refactor request was submitted with the "bars" tool, which shows the
+  // pixel bars animation instead.
+  const useBars = refactorLoading && refactorAnimStyle === "bars";
   const isAiLoading = rewriteLoading || refactorLoading;
-  const rippleWords = isAiLoading ? tokenize(currentPage.rawText) : [];
+  const rippleWords =
+    isAiLoading && !useBars ? tokenize(currentPage.rawText) : [];
   const rippleOrigin = (rippleWords.length - 1) / 2;
 
   return (
@@ -142,6 +148,7 @@ export default function EditorPane({
           ))}
         </div>
       )}
+      {useBars && <BarsCanvas className="bars-overlay" />}
 
       {pendingRefactor ? (
         <div className="rewrite-panel">
@@ -209,7 +216,7 @@ export default function EditorPane({
             </button>
           </div>
         </div>
-      ) : isAiLoading ? (
+      ) : isAiLoading && !useBars ? (
         <div className="ripple-canvas" aria-hidden="true">
           {rippleWords.map((word, idx) => (
             <span
@@ -251,6 +258,7 @@ export default function EditorPane({
         <textarea
           className={`editor-textarea ${refactorArmed ? "editor-textarea-quill" : ""}`}
           value={currentPage.rawText}
+          readOnly={useBars}
           onChange={(e) => {
             onChangeText(e.target.value);
             onSelectionChange(null);

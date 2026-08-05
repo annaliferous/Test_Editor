@@ -1,8 +1,16 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 
-import { EMOTION_WORD_LISTS, getEmotionMatchIdsInWords } from "./data/animations";
-import { makePage } from "./utils/pages";
+import {
+  EMOTION_WORD_LISTS,
+  getEmotionMatchIdsInWords,
+} from "./data/animations";
+import {
+  makePage,
+  makePagesFromText,
+  splitTextIntoChunks,
+  DEFAULT_MAX_PAGE_CHARS,
+} from "./utils/pages";
 import { newWordId } from "./utils/ids";
 import { intensityToDuration } from "./utils/animationMath";
 
@@ -15,14 +23,14 @@ import PagesRail from "./components/PagesRail";
 import EditorPane from "./components/EditorPane";
 import ControlsPane from "./components/ControlsPane";
 import DragGhost from "./components/DragGhost";
+import StartupModal from "./components/StartupModal";
 
 function App() {
   // ---- Core document state: pages, the active page, and word selection ----
-  const [pages, setPages] = useState([
-    makePage(
-      "I felt a deep affection and passion for this project. Also the bliss and happiness made me feel joy",
-    ),
-  ]);
+  // Starts as a single empty page; the startup modal below lets the user
+  // replace it with an uploaded file or the sample text before they start
+  // editing, or just dismiss it and keep writing from scratch.
+  const [pages, setPages] = useState([makePage("")]);
   const [currentPageId, setCurrentPageId] = useState(pages[0].id);
   const currentPage = pages.find((p) => p.id === currentPageId) ?? pages[0];
 
@@ -35,10 +43,32 @@ function App() {
   // { start, end, text }, relative to currentPage.rawText. Null when nothing
   // is selected.
   const [selection, setSelection] = useState(null);
-  // Whether the Refactor tool is "armed": only while armed does selecting
-  // text in the textarea show the quill cursor and pop up the instruction
-  // prompt. Toggled by clicking the quill button.
-  const [refactorArmed, setRefactorArmed] = useState(false);
+  // Which Refactor tool is "armed" (null | "ripple" | "bars"): only while
+  // armed does selecting text in the textarea show the quill cursor and pop
+  // up the instruction prompt. There are two quill buttons — same tool,
+  // different "AI thinking" loading animation — toggled by clicking either.
+  const [refactorTool, setRefactorTool] = useState(null);
+  // Which animation style the in-flight refactor request is using, frozen
+  // at submit time (refactorTool itself gets cleared immediately on submit).
+  const [refactorAnimStyle, setRefactorAnimStyle] = useState("ripple");
+  // Shown on first load, so the user can choose how to start the document.
+  const [showStartupModal, setShowStartupModal] = useState(true);
+
+  function loadDocumentText(text) {
+    const cleaned = text.trim().replace(/\r\n/g, "\n").replace(/\n{2,}/g, "\n\n");
+    const newPages = makePagesFromText(cleaned);
+    setPages(newPages);
+    setCurrentPageId(newPages[0].id);
+    setShowStartupModal(false);
+  }
+
+  function startEmptyDocument() {
+    setShowStartupModal(false);
+  }
+
+  function openStartupModal() {
+    setShowStartupModal(true);
+  }
 
   // Split a page's rawText into selectable words the first time it's
   // needed in Search mode (either the current page, or every page when
@@ -70,7 +100,7 @@ function App() {
   function switchMode(newMode) {
     setSelection(null);
     setPendingRefactor(null);
-    setRefactorArmed(false);
+    setRefactorTool(null);
     if (newMode === "search") {
       // Split current page into words if it isn't already
       setCurrentPageWords((prevWords) => {
@@ -104,7 +134,26 @@ function App() {
   }
 
   function updateCurrentPageText(text) {
-    updatePage(currentPageId, () => ({ rawText: text }));
+    if (text.length <= DEFAULT_MAX_PAGE_CHARS) {
+      updatePage(currentPageId, () => ({ rawText: text }));
+      return;
+    }
+    // Typed (or pasted) past one page's worth of text: keep the head on
+    // this page and spill the rest into new page(s) right after it, split
+    // at the same word/sentence-aware boundaries as a bulk-loaded file.
+    const [head, ...overflowChunks] = splitTextIntoChunks(
+      text,
+      DEFAULT_MAX_PAGE_CHARS,
+    );
+    const overflowPages = overflowChunks.map((chunk) => makePage(chunk));
+    setPages((prev) => {
+      const idx = prev.findIndex((p) => p.id === currentPageId);
+      if (idx === -1) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], rawText: head };
+      next.splice(idx + 1, 0, ...overflowPages);
+      return next;
+    });
   }
 
   function setCurrentPageWords(updaterOrArray) {
@@ -122,7 +171,7 @@ function App() {
     setPendingRewrite(null);
     setPendingRefactor(null);
     setSelection(null);
-    setRefactorArmed(false);
+    setRefactorTool(null);
   }
 
   function addPage() {
@@ -272,18 +321,19 @@ function App() {
     else applyAnimation(animationKey);
   }
 
-  function toggleRefactorArm() {
-    setRefactorArmed((armed) => !armed);
+  function toggleRefactorArm(tool) {
+    setRefactorTool((current) => (current === tool ? null : tool));
   }
 
   function submitRefactor() {
+    setRefactorAnimStyle(refactorTool ?? "ripple");
     requestRefactor();
-    setRefactorArmed(false);
+    setRefactorTool(null);
   }
 
   function cancelRefactorSelection() {
     setSelection(null);
-    setRefactorArmed(false);
+    setRefactorTool(null);
   }
 
   function isAnimationDisabled(animationKey) {
@@ -300,13 +350,31 @@ function App() {
   // Drag an animation button onto the word canvas to trigger it.
   const { dragState, startGifDrag } = useGifDrag(triggerAnimationAction);
 
+  // Whichever AI flow currently has a suggestion ready, keyed by page id —
+  // shown as a diff preview in that page's thumbnail too.
+  const pendingDiffsByPage =
+    pendingRewrite?.diffsByPage ?? pendingRefactor?.diffsByPage ?? null;
+
   return (
     <div className="app">
+      {showStartupModal && (
+        <StartupModal
+          onSelectText={loadDocumentText}
+          onStartEmpty={startEmptyDocument}
+          onCancel={() => setShowStartupModal(false)}
+        />
+      )}
       <header className="app-header">
-        <h1>Word Animator</h1>
-        <p>
-          Write text, split it into words, select words, apply an animation.
-        </p>
+        <div>
+          <h1>Word Animator</h1>
+          <p>
+            Write text, split it into words, select words, apply an
+            animation.
+          </p>
+        </div>
+        <button className="btn btn-header-action" onClick={openStartupModal}>
+          New / Import Document
+        </button>
       </header>
 
       <main className="layout">
@@ -315,7 +383,17 @@ function App() {
           currentPageId={currentPageId}
           draggingPageId={draggingPageId}
           rewritingPageIds={rewritingPageIds}
-          rippleActive={scope === "global" && (rewriteLoading || refactorLoading)}
+          rippleActive={
+            scope === "global" &&
+            (rewriteLoading ||
+              (refactorLoading && refactorAnimStyle !== "bars"))
+          }
+          barsActive={
+            scope === "global" &&
+            refactorLoading &&
+            refactorAnimStyle === "bars"
+          }
+          pendingDiffsByPage={pendingDiffsByPage}
           loadingAnim={loadingAnim}
           intensity={intensity}
           intensityToDuration={intensityToDuration}
@@ -345,7 +423,8 @@ function App() {
           rewriteError={rewriteError}
           selection={selection}
           onSelectionChange={setSelection}
-          refactorArmed={refactorArmed}
+          refactorArmed={!!refactorTool}
+          refactorAnimStyle={refactorAnimStyle}
           onCancelRefactor={cancelRefactorSelection}
           refactorPrompt={refactorPrompt}
           onSetRefactorPrompt={setRefactorPrompt}
@@ -365,7 +444,7 @@ function App() {
           intensity={intensity}
           onSetIntensity={setIntensity}
           isAnimationDisabled={isAnimationDisabled}
-          refactorArmed={refactorArmed}
+          refactorTool={refactorTool}
           refactorLoading={refactorLoading}
           onToggleRefactorArm={toggleRefactorArm}
           onTriggerAnimation={triggerAnimationAction}

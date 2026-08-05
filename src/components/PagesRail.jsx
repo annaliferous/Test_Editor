@@ -1,10 +1,15 @@
 import PageThumbnail from "./PageThumbnail";
+import { useCascadingBars } from "../hooks/useCascadingBars";
 
-// Base delay (seconds) before the ripple reaches the first page thumbnail,
-// and the step between each subsequent one — a continuation of the wave
-// that starts in the main editor's text.
+// Base delay (seconds) before the ripple reaches the active page's
+// thumbnail — a continuation of the wave that starts in the main editor's
+// text — and the step between each thumbnail further away from it. The
+// wave radiates outward from the active page in both directions, so a
+// page in the middle ripples up and down at once, while the top or bottom
+// page ripples in a single direction (and keeps looping since the
+// underlying CSS animation repeats forever).
 const RIPPLE_PAGE_BASE_DELAY = 0.5;
-const RIPPLE_PAGE_STEP = 0.12;
+const RIPPLE_PAGE_STEP = 0.45;
 
 // Left sidebar: list of page thumbnails (reorderable by drag) plus the
 // "add page" button.
@@ -14,6 +19,8 @@ export default function PagesRail({
   draggingPageId,
   rewritingPageIds,
   rippleActive,
+  barsActive,
+  pendingDiffsByPage,
   loadingAnim,
   intensity,
   intensityToDuration,
@@ -24,6 +31,12 @@ export default function PagesRail({
   onDeletePage,
   onAddPage,
 }) {
+  const activePageIdx = pages.findIndex((p) => p.id === currentPageId);
+  const registerBarsCanvas = useCascadingBars(
+    barsActive,
+    pages.map((p) => p.id),
+  );
+
   return (
     <aside className="pages-pane">
       <div className="pages-list">
@@ -36,7 +49,13 @@ export default function PagesRail({
             isDragging={draggingPageId === page.id}
             isRewriting={rewritingPageIds.has(page.id)}
             isRippling={rippleActive}
-            rippleDelay={RIPPLE_PAGE_BASE_DELAY + idx * RIPPLE_PAGE_STEP}
+            rippleDelay={
+              RIPPLE_PAGE_BASE_DELAY +
+              Math.abs(idx - activePageIdx) * RIPPLE_PAGE_STEP
+            }
+            isBarsRippling={barsActive}
+            registerBarsCanvas={registerBarsCanvas}
+            pendingDiff={pendingDiffsByPage?.[page.id] ?? null}
             loadingAnim={loadingAnim}
             intensity={intensity}
             intensityToDuration={intensityToDuration}

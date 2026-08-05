@@ -17,3 +17,8 @@ If you are developing a production application, we recommend using TypeScript wi
 
 #ToDos
 add score, calculate strength: more animation intensity
+
+##
+
+https://www.gutenberg.org/cache/epub/53419/pg53419-images.html
+https://codepen.io/yoosuf/pen/kMOXOA

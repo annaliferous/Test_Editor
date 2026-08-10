@@ -385,8 +385,8 @@ function App() {
           rewritingPageIds={rewritingPageIds}
           rippleActive={
             scope === "global" &&
-            (rewriteLoading ||
-              (refactorLoading && refactorAnimStyle !== "bars"))
+            refactorLoading &&
+            refactorAnimStyle === "ripple"
           }
           barsActive={
             scope === "global" &&

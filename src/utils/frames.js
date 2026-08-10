@@ -8,6 +8,10 @@ const joyFramesRaw = import.meta.glob("../assets/joy/*.png", {
   eager: true,
   import: "default",
 });
+const signalFramesRaw = import.meta.glob("../assets/signal/*.png", {
+  eager: true,
+  import: "default",
+});
 
 function sortedFrames(rawGlob) {
   return Object.keys(rawGlob)
@@ -20,4 +24,6 @@ function sortedFrames(rawGlob) {
 export const FRAMES = {
   love: sortedFrames(loveFramesRaw),
   joy: sortedFrames(joyFramesRaw),
+  // sprite_0 (strongest) .. sprite_3 (weakest)
+  signal: sortedFrames(signalFramesRaw),
 };

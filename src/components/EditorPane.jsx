@@ -91,14 +91,14 @@ export default function EditorPane({
     !refactorLoading &&
     !rewriteLoading;
 
-  // While the AI is evaluating a prompt (either flow), show the text as a
-  // ripple of words instead of the plain textarea/word-canvas — unless the
-  // refactor request was submitted with the "bars" tool, which shows the
-  // pixel bars animation instead.
+  // The ripple/bars "AI thinking" animations are specific to the Refactor
+  // tool's two quill buttons — which style shows depends on which one was
+  // used to submit the in-flight request. The emotion-based Rewrite flow
+  // (Joy/Love, rewriteLoading) just keeps the text visible with the
+  // floating-gif overlay below, same as before either animation existed.
+  const useRipple = refactorLoading && refactorAnimStyle === "ripple";
   const useBars = refactorLoading && refactorAnimStyle === "bars";
-  const isAiLoading = rewriteLoading || refactorLoading;
-  const rippleWords =
-    isAiLoading && !useBars ? tokenize(currentPage.rawText) : [];
+  const rippleWords = useRipple ? tokenize(currentPage.rawText) : [];
   const rippleOrigin = (rippleWords.length - 1) / 2;
 
   return (
@@ -216,7 +216,7 @@ export default function EditorPane({
             </button>
           </div>
         </div>
-      ) : isAiLoading && !useBars ? (
+      ) : useRipple ? (
         <div className="ripple-canvas" aria-hidden="true">
           {rippleWords.map((word, idx) => (
             <span
@@ -258,7 +258,7 @@ export default function EditorPane({
         <textarea
           className={`editor-textarea ${refactorArmed ? "editor-textarea-quill" : ""}`}
           value={currentPage.rawText}
-          readOnly={useBars}
+          readOnly={useBars || rewriteLoading}
           onChange={(e) => {
             onChangeText(e.target.value);
             onSelectionChange(null);

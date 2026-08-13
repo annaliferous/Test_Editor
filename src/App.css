@@ -9,10 +9,6 @@
   --accent: #d97757;
   --accent-hover: #c8654a;
   --accent-soft: rgba(217, 119, 87, 0.12);
-  --search-color: #3b7dd8;
-  --search-soft: rgba(59, 125, 216, 0.12);
-  --rewrite-color: #3b7dd8;
-  --rewrite-soft: rgba(59, 125, 216, 0.12);
 }
 
 body {
@@ -31,6 +27,20 @@ body {
   color: var(--text);
 }
 
+.app-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.btn-header-action {
+  flex: none;
+  font-size: 13px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
 .app-header h1 {
   margin: 0 0 4px;
   font-size: 22px;
@@ -44,6 +54,65 @@ body {
   font-size: 14px;
 }
 
+/* ---------- Startup modal ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(42, 42, 38, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.modal {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  padding: 24px;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px;
+}
+
+.modal-close:hover:not(:disabled) {
+  color: var(--accent-hover);
+}
+
+.modal h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-actions .btn {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .layout {
   flex: 1;
   display: grid;
@@ -55,14 +124,23 @@ body {
 /* ---------- Pages pane (left rail) ---------- */
 
 .pages-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 10px;
-  overflow-y: auto;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* The rail's own scrolling viewport, separate from .pages-pane, so a halo
+   ring anchored to .pages-pane's edge stays put while the thumbnail stack
+   scrolls underneath it — the stack reads as one continuous canvas. */
+.pages-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .pages-list {
@@ -110,17 +188,6 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.page-thumb-canvas {
-  width: 700px;
-  padding: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 8px 6px;
-  transform: scale(0.27);
-  transform-origin: top left;
-}
-
 .page-thumb-text {
   padding: 8px;
   color: var(--text);
@@ -163,26 +230,8 @@ body {
   color: var(--accent-hover);
 }
 
-.page-thumb-loading-overlay {
-  z-index: 2;
-}
-
-.page-thumb-loading-gif {
-  width: 18px !important;
-}
-
 .add-page-btn {
   margin-top: 10px;
-}
-.mode-warning {
-  margin: 8px 0 0;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: var(--search-soft);
-  border: 1px solid var(--search-color);
-  color: var(--search-color);
-  font-size: 12px;
-  font-weight: 600;
 }
 
 /* ---------- Editor pane (center) ---------- */
@@ -196,44 +245,6 @@ body {
   min-height: 0;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-}
-
-.loading-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  border-radius: 10px;
-}
-
-.loading-gif {
-  position: absolute;
-  height: auto;
-  object-fit: contain;
-  opacity: 0;
-  animation-name: floatPulse;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-@keyframes floatPulse {
-  0% {
-    opacity: 0;
-    transform: translateY(0) scale(0.8);
-  }
-  15% {
-    opacity: 0.9;
-  }
-  50% {
-    transform: translateY(-14px) scale(1.1);
-  }
-  85% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-28px) scale(0.8);
-  }
 }
 
 .editor-textarea {
@@ -256,44 +267,6 @@ body {
 
 .editor-textarea-quill {
   cursor: url("./assets/quill.png") 4 60, text;
-}
-
-.word-canvas {
-  height: 100%;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 8px 6px;
-}
-
-.word {
-  display: inline-block;
-  font-size: 18px;
-  line-height: 1.4;
-  padding: 2px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  border: 1px solid transparent;
-  transition:
-    transform 0.3s ease,
-    background 0.15s ease;
-  color: var(--text);
-}
-
-.word:hover {
-  background: #f0efe9;
-}
-
-.word-selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.sentence-selected {
-  outline: 1px dashed var(--accent);
 }
 
 /* ---------- Controls pane (right) ---------- */
@@ -376,25 +349,72 @@ body {
   border-top: 1px solid var(--border-strong);
 }
 
-.refactor-popup-input {
-  width: 240px;
-  box-sizing: border-box;
+.refactor-popup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 200px;
+}
+
+.refactor-popup-actions .btn {
+  width: 100%;
+}
+
+.issue-popover {
+  position: absolute;
+  z-index: 6;
+  background: var(--bg-panel);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  width: 220px;
+}
+
+.issue-popover-above {
+  transform: translate(-50%, calc(-100% - 10px));
+}
+
+.issue-popover-below {
+  transform: translate(-50%, 10px);
+}
+
+.issue-popover::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-panel);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.issue-popover-above::after {
+  bottom: -5px;
+  border-right: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.issue-popover-below::after {
+  top: -5px;
+  border-left: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+}
+
+.issue-popover-reason {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--text);
-  background: #fff;
-  outline: none;
 }
 
-.refactor-popup-input:focus {
-  border-color: var(--accent);
+.issue-popover-actions {
+  display: flex;
+  gap: 6px;
 }
 
-.refactor-popup-input::placeholder {
-  color: var(--text-faint);
+.issue-popover-actions .btn {
+  flex: 1;
 }
 
 .hint {
@@ -463,33 +483,6 @@ body {
   background: transparent;
 }
 
-/* Mode selection buttons (Search / Rewrite) — distinct colors per mode
-   so it's unmistakable which one is active */
-
-.btn-mode-search.btn-active {
-  background: var(--search-soft);
-  border-color: var(--search-color);
-  color: var(--search-color);
-  font-weight: 700;
-  box-shadow: inset 0 0 0 1px var(--search-color);
-}
-
-.btn-mode-search.btn-active:hover:not(:disabled) {
-  background: rgba(59, 125, 216, 0.18);
-}
-
-.btn-mode-rewrite.btn-active {
-  background: var(--rewrite-soft);
-  border-color: var(--rewrite-color);
-  color: var(--rewrite-color);
-  font-weight: 700;
-  box-shadow: inset 0 0 0 1px var(--rewrite-color);
-}
-
-.btn-mode-rewrite.btn-active:hover:not(:disabled) {
-  background: rgba(138, 92, 214, 0.18);
-}
-
 .btn-refactor.btn-active {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -511,25 +504,11 @@ body {
   color: var(--text);
 }
 
-.btn-animation-gif {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 4px;
-  display: block;
-  pointer-events: none;
-}
-
 .animation-cell {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-}
-
-.intensity-slider {
-  width: 100%;
-  accent-color: var(--accent);
 }
 
 /* Scope Buttons */
@@ -546,170 +525,8 @@ body {
 .btn-scope-global.btn-active:hover:not(:disabled) {
   background: rgba(217, 119, 87, 0.18);
 }
-/* ---------- Word animations ---------- */
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.anim-fade-in {
-  animation: fadeIn 0.6s ease both;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.anim-slide-up {
-  animation: slideUp 0.5s ease both;
-}
-
-@keyframes joy {
-  0% {
-    transform: translateY(0);
-  }
-  30% {
-    transform: translateY(-14px);
-  }
-  50% {
-    transform: translateY(0);
-  }
-  70% {
-    transform: translateY(-7px);
-  }
-  100% {
-    transform: translateY(0);
-  }
-}
-.anim-joy {
-  animation-name: joy;
-  animation-duration: var(--joy-duration, 0.7s);
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-@keyframes shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20% {
-    transform: translateX(-6px);
-  }
-  40% {
-    transform: translateX(6px);
-  }
-  60% {
-    transform: translateX(-4px);
-  }
-  80% {
-    transform: translateX(4px);
-  }
-}
-.anim-shake {
-  animation: shake 0.5s ease;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.25);
-  }
-}
-.anim-pulse {
-  animation: pulse 0.5s ease;
-}
-
-@keyframes rotateIn {
-  from {
-    opacity: 0;
-    transform: rotate(-25deg);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(0deg);
-  }
-}
-.anim-rotate-in {
-  animation: rotateIn 0.5s ease both;
-}
-
-@keyframes pop {
-  0% {
-    transform: scale(0.4);
-    opacity: 0;
-  }
-  70% {
-    transform: scale(1.15);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-.anim-pop {
-  animation: pop 0.4s ease both;
-}
-
-@keyframes love {
-  0% {
-    transform: scale(1);
-  }
-  14% {
-    transform: scale(1.15);
-  }
-  28% {
-    transform: scale(1);
-  }
-  42% {
-    transform: scale(1.15);
-  }
-  70% {
-    transform: scale(1);
-  }
-}
-.anim-love {
-  animation-name: love;
-  animation-duration: var(--love-duration, 1.2s);
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-@keyframes textRide {
-  0%,
-  44% {
-    transform: translateY(0);
-  }
-  47% {
-    transform: translateY(-10px);
-  }
-  50% {
-    transform: translateY(6px);
-  }
-  53%,
-  100% {
-    transform: translateY(0);
-  }
-}
-.anim-heartbeat .word {
-  display: inline-block;
-  animation: textRide 2s ease-in-out infinite;
-}
-
-/* ---------- Rewrite panel ---------- */
+/* ---------- Consistency-check panel ---------- */
 
 .rewrite-panel {
   height: 100%;
@@ -725,24 +542,14 @@ body {
   line-height: 1.7;
 }
 
-.diff-word {
+.inconsistency-highlight {
+  background: #fbe08b;
+  color: var(--text);
   border-radius: 3px;
   padding: 1px 2px;
-}
-
-.diff-equal {
-  color: var(--text);
-}
-
-.diff-add {
-  background: var(--accent-soft);
-  color: #a44d2e;
-}
-
-.diff-remove {
-  color: var(--text-faint);
-  text-decoration: line-through;
-  opacity: 0.7;
+  cursor: help;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .rewrite-actions {
@@ -755,6 +562,138 @@ body {
   flex: 1;
 }
 
+/* ---------- Halo-style off-screen cues ---------- */
+/* A ring is (conceptually) centered on the off-screen target with a
+   radius scaled to its distance; .halo-ring-clip only lets a shallow cap
+   of that ring show through, right at the editor's edge. Smaller radius
+   (closer target) means a tighter, more tightly-curved cap; larger radius
+   (farther target) means a wider, flatter one. */
+
+.halo-ring {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.halo-ring-up {
+  animation: halo-ring-enter-top 300ms ease-out both;
+}
+
+.halo-ring-down {
+  animation: halo-ring-enter-bottom 300ms ease-out both;
+}
+
+.halo-ring-clip {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 20px;
+  overflow: hidden;
+}
+
+.halo-ring-circle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  border: 3px solid var(--accent);
+  background: var(--accent-soft);
+  transition:
+    width 150ms ease-out,
+    height 150ms ease-out,
+    top 150ms ease-out,
+    bottom 150ms ease-out;
+}
+
+.halo-ring:hover .halo-ring-circle,
+.halo-ring:focus-visible .halo-ring-circle {
+  border-color: var(--accent-hover);
+}
+
+.halo-ring-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 0 5px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+@keyframes halo-ring-enter-top {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes halo-ring-enter-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Once a flagged word scrolls into view, its edge cue settles into a ring
+   drawn directly around the word itself, and it stays there — at a fixed
+   size, no longer distance-scaled — until the issue is accepted or
+   dismissed. */
+.halo-word-ring {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 5px var(--accent-soft);
+  animation: halo-word-settle 200ms ease-out both;
+}
+
+@keyframes halo-word-settle {
+  from {
+    box-shadow:
+      0 0 0 0 var(--accent),
+      0 0 0 0 var(--accent-soft);
+  }
+  to {
+    box-shadow:
+      0 0 0 2px var(--accent),
+      0 0 0 5px var(--accent-soft);
+  }
+}
+
+.page-thumb-issues .halo-word-ring {
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 0 2px var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halo-word-ring {
+    animation: none;
+  }
+}
+
+.btn-halo.btn-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 960px) {
@@ -764,6 +703,8 @@ body {
   }
   .pages-pane {
     flex-direction: row;
+  }
+  .pages-scroll {
     overflow-x: auto;
     overflow-y: hidden;
   }

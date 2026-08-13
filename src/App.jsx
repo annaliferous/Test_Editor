@@ -1,99 +1,63 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import "./App.css";
 
-import { EMOTION_WORD_LISTS, getEmotionMatchIdsInWords } from "./data/animations";
-import { makePage } from "./utils/pages";
-import { newWordId } from "./utils/ids";
-import { intensityToDuration } from "./utils/animationMath";
+import {
+  makePage,
+  makePagesFromText,
+  splitTextIntoChunks,
+  DEFAULT_MAX_PAGE_CHARS,
+} from "./utils/pages";
 
 import { usePageDrag } from "./hooks/usePageDrag";
-import { useGifDrag } from "./hooks/useGifDrag";
-import { useRewrite } from "./hooks/useRewrite";
-import { useRefactor } from "./hooks/useRefactor";
+import { useConsistencyCheck } from "./hooks/useConsistencyCheck";
 
 import PagesRail from "./components/PagesRail";
 import EditorPane from "./components/EditorPane";
 import ControlsPane from "./components/ControlsPane";
-import DragGhost from "./components/DragGhost";
+import StartupModal from "./components/StartupModal";
 
 function App() {
-  // ---- Core document state: pages, the active page, and word selection ----
-  const [pages, setPages] = useState([
-    makePage(
-      "I felt a deep affection and passion for this project. Also the bliss and happiness made me feel joy",
-    ),
-  ]);
+  // ---- Core document state: pages and the active page ----
+  // Starts as a single empty page; the startup modal below lets the user
+  // replace it with an uploaded file or the sample text before they start
+  // editing, or just dismiss it and keep writing from scratch.
+  const [pages, setPages] = useState([makePage("")]);
   const [currentPageId, setCurrentPageId] = useState(pages[0].id);
   const currentPage = pages.find((p) => p.id === currentPageId) ?? pages[0];
 
   const [scope, setScope] = useState("local"); // "local" | "global"
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [mode, setMode] = useState("rewrite"); // "rewrite" (free text) | "search" (word selection)
-  const isSearchMode = mode === "search";
-  const [intensity, setIntensity] = useState({ joy: 50, love: 50 });
-  // Range selected in the Rewrite-mode textarea, for the Refactor flow:
-  // { start, end, text }, relative to currentPage.rawText. Null when nothing
-  // is selected.
+  // Range selected in the editor textarea, for the consistency-check flow:
+  // { start, end, text }, relative to currentPage.rawText. Null when
+  // nothing is selected.
   const [selection, setSelection] = useState(null);
-  // Whether the Refactor tool is "armed": only while armed does selecting
-  // text in the textarea show the quill cursor and pop up the instruction
-  // prompt. Toggled by clicking the quill button.
-  const [refactorArmed, setRefactorArmed] = useState(false);
+  // Which quill tool is "armed" (null | "ai" | "random"): only while armed
+  // does selecting text in the textarea show the quill cursor and pop up
+  // the "check for inconsistencies" trigger. Two buttons share this same
+  // flow — "ai" asks Ollama for real; "random" instantly flags a few random
+  // spans instead, for testing the UI without waiting on a slow prompt.
+  const [checkTool, setCheckTool] = useState(null);
+  // Shown on first load, so the user can choose how to start the document.
+  const [showStartupModal, setShowStartupModal] = useState(true);
+  // "Halo"-style off-screen cues: small arc indicators at the editor's
+  // edges pointing toward flagged inconsistencies that are out of view —
+  // either scrolled past within the current page, or living on a
+  // different page entirely. Opt-in visualization, off by default.
+  const [haloCuesEnabled, setHaloCuesEnabled] = useState(false);
 
-  // Split a page's rawText into selectable words the first time it's
-  // needed in Search mode (either the current page, or every page when
-  // scope is "global").
-  useEffect(() => {
-    if (mode !== "search") return;
-    setPages((prev) => {
-      let changed = false;
-      const next = prev.map((page) => {
-        const shouldSplit = scope === "global" || page.id === currentPageId;
-        if (!shouldSplit || page.words.length > 0) return page;
-        const parts = page.rawText.trim().split(/\s+/).filter(Boolean);
-        if (parts.length === 0) return page;
-        changed = true;
-        return {
-          ...page,
-          words: parts.map((text) => ({
-            id: newWordId(),
-            text,
-            animation: null,
-            run: 0,
-          })),
-        };
-      });
-      return changed ? next : prev;
-    });
-  }, [mode, scope, currentPageId]);
+  function loadDocumentText(text) {
+    const cleaned = text.trim().replace(/\r\n/g, "\n").replace(/\n{2,}/g, "\n\n");
+    const newPages = makePagesFromText(cleaned);
+    setPages(newPages);
+    setCurrentPageId(newPages[0].id);
+    setShowStartupModal(false);
+  }
 
-  function switchMode(newMode) {
-    setSelection(null);
-    setPendingRefactor(null);
-    setRefactorArmed(false);
-    if (newMode === "search") {
-      // Split current page into words if it isn't already
-      setCurrentPageWords((prevWords) => {
-        if (prevWords.length > 0) return prevWords;
-        const parts = currentPage.rawText.trim().split(/\s+/).filter(Boolean);
-        return parts.map((text) => ({
-          id: newWordId(),
-          text,
-          animation: null,
-          run: 0,
-        }));
-      });
-    } else if (newMode === "rewrite") {
-      // Going back to free-text editing: collapse words back into rawText
-      // so typing continues from the latest word content. Note: this
-      // intentionally drops per-word animation state, since rewrite mode
-      // treats the page as plain text again.
-      if (currentPage.words.length > 0) {
-        const text = currentPage.words.map((w) => w.text).join(" ");
-        updatePage(currentPageId, () => ({ rawText: text, words: [] }));
-      }
-    }
-    setMode(newMode);
+  function startEmptyDocument() {
+    setShowStartupModal(false);
+  }
+
+  function openStartupModal() {
+    setShowStartupModal(true);
   }
 
   // ---- Page-scoped helpers ----
@@ -104,25 +68,36 @@ function App() {
   }
 
   function updateCurrentPageText(text) {
-    updatePage(currentPageId, () => ({ rawText: text }));
-  }
-
-  function setCurrentPageWords(updaterOrArray) {
-    updatePage(currentPageId, (p) => ({
-      words:
-        typeof updaterOrArray === "function"
-          ? updaterOrArray(p.words)
-          : updaterOrArray,
-    }));
+    if (text.length <= DEFAULT_MAX_PAGE_CHARS) {
+      updatePage(currentPageId, () => ({ rawText: text }));
+      return;
+    }
+    // Typed (or pasted) past one page's worth of text: keep the head on
+    // this page and spill the rest into new page(s) right after it, split
+    // at the same word/sentence-aware boundaries as a bulk-loaded file.
+    const [head, ...overflowChunks] = splitTextIntoChunks(
+      text,
+      DEFAULT_MAX_PAGE_CHARS,
+    );
+    const overflowPages = overflowChunks.map((chunk) => makePage(chunk));
+    setPages((prev) => {
+      const idx = prev.findIndex((p) => p.id === currentPageId);
+      if (idx === -1) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], rawText: head };
+      next.splice(idx + 1, 0, ...overflowPages);
+      return next;
+    });
   }
 
   function switchPage(pageId) {
     setCurrentPageId(pageId);
-    setSelectedIds(new Set());
-    setPendingRewrite(null);
-    setPendingRefactor(null);
+    // Deliberately NOT clearing pendingCheck here: a consistency check's
+    // flagged spans should stay visible (in both the editor and the page
+    // thumbnails) as the user navigates between pages, until they dismiss
+    // it or start a new check.
     setSelection(null);
-    setRefactorArmed(false);
+    setCheckTool(null);
   }
 
   function addPage() {
@@ -148,165 +123,63 @@ function App() {
   const { draggingPageId, dragMovedRef, registerPageRef, startPageDrag } =
     usePageDrag(pages, setPages);
 
-  function toggleWord(id) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function getEmotionMatchIds(animationKey) {
-    return getEmotionMatchIdsInWords(currentPage.words, animationKey);
-  }
-
-  function applyAnimation(animationKey) {
-    const matchedIds = getEmotionMatchIds(animationKey);
-    const targetIds = new Set([...selectedIds, ...matchedIds]);
-    if (targetIds.size === 0) return;
-
-    const targetWords = currentPage.words.filter((w) => targetIds.has(w.id));
-    const allAlreadyActive = targetWords.every(
-      (w) => w.animation === animationKey,
-    );
-    const nextAnim = allAlreadyActive ? null : animationKey;
-
-    if (scope === "local") {
-      setCurrentPageWords((prev) =>
-        prev.map((w) =>
-          targetIds.has(w.id)
-            ? { ...w, animation: nextAnim, run: w.run + 1 }
-            : w,
-        ),
-      );
-      return;
-    }
-
-    setPages((prev) =>
-      prev.map((page) => {
-        const isCurrent = page.id === currentPageId;
-
-        const pageWords =
-          page.words.length > 0
-            ? page.words
-            : page.rawText
-                .trim()
-                .split(/\s+/)
-                .filter(Boolean)
-                .map((text) => ({
-                  id: newWordId(),
-                  text,
-                  animation: null,
-                  run: 0,
-                }));
-
-        const pageTargets = getEmotionMatchIdsInWords(pageWords, animationKey);
-        if (isCurrent) selectedIds.forEach((id) => pageTargets.add(id));
-        if (pageTargets.size === 0 && pageWords === page.words) return page;
-
-        return {
-          ...page,
-          words: pageWords.map((w) =>
-            pageTargets.has(w.id)
-              ? { ...w, animation: nextAnim, run: w.run + 1 }
-              : w,
-          ),
-        };
-      }),
-    );
-  }
-
-  function clearAnimations() {
-    setCurrentPageWords((prev) =>
-      prev.map((w) =>
-        selectedIds.has(w.id) ? { ...w, animation: null, run: w.run + 1 } : w,
-      ),
-    );
-  }
-
-  // Ollama-backed rewrite flow (request/accept/reject + its loading state).
+  // Ollama-backed consistency-check flow: the quill flags inconsistent
+  // spans in a user-selected range (local) or the whole document (global)
+  // instead of rewriting anything.
   const {
-    pendingRewrite,
-    rewriteLoading,
-    rewriteError,
-    loadingAnim,
-    rewritingPageIds,
-    requestRewrite,
-    acceptRewrite,
-    rejectRewrite,
-    setPendingRewrite,
-  } = useRewrite({
+    pendingCheck,
+    checkLoading,
+    checkError,
+    requestCheck,
+    requestRandomCheck,
+    acceptIssue,
+    dismissIssue,
+    acceptAllCheck,
+    dismissAllCheck,
+  } = useConsistencyCheck({
     pages,
-    setPages,
-    currentPage,
-    scope,
-    intensity,
-    setSelectedIds,
-  });
-
-  // Ollama-backed refactor flow: rewrite a user-selected range of the
-  // current page's text, guided by a typed instruction.
-  const {
-    refactorPrompt,
-    setRefactorPrompt,
-    pendingRefactor,
-    refactorLoading,
-    refactorError,
-    requestRefactor,
-    acceptRefactor,
-    rejectRefactor,
-    setPendingRefactor,
-  } = useRefactor({
-    pages,
-    setPages,
-    currentPage,
     currentPageId,
     scope,
     selection,
     setSelection,
   });
 
-  function triggerAnimationAction(animationKey) {
-    if (mode === "rewrite") requestRewrite(animationKey);
-    else applyAnimation(animationKey);
+  function toggleCheckArm(tool) {
+    setCheckTool((current) => (current === tool ? null : tool));
   }
 
-  function toggleRefactorArm() {
-    setRefactorArmed((armed) => !armed);
+  function submitCheck() {
+    if (checkTool === "random") requestRandomCheck();
+    else requestCheck();
+    setCheckTool(null);
   }
 
-  function submitRefactor() {
-    requestRefactor();
-    setRefactorArmed(false);
-  }
-
-  function cancelRefactorSelection() {
+  function cancelCheckSelection() {
     setSelection(null);
-    setRefactorArmed(false);
+    setCheckTool(null);
   }
 
-  function isAnimationDisabled(animationKey) {
-    if (rewriteLoading) return true;
-    if (mode === "rewrite") {
-      const hasText =
-        currentPage.words.length > 0 || currentPage.rawText.trim().length > 0;
-      return !hasText || !EMOTION_WORD_LISTS[animationKey];
-    }
-    if (selectedIds.size > 0) return false;
-    return !EMOTION_WORD_LISTS[animationKey];
+  function toggleHaloCues() {
+    setHaloCuesEnabled((enabled) => !enabled);
   }
-
-  // Drag an animation button onto the word canvas to trigger it.
-  const { dragState, startGifDrag } = useGifDrag(triggerAnimationAction);
 
   return (
     <div className="app">
+      {showStartupModal && (
+        <StartupModal
+          onSelectText={loadDocumentText}
+          onStartEmpty={startEmptyDocument}
+          onCancel={() => setShowStartupModal(false)}
+        />
+      )}
       <header className="app-header">
-        <h1>Word Animator</h1>
-        <p>
-          Write text, split it into words, select words, apply an animation.
-        </p>
+        <div>
+          <h1>Word Animator</h1>
+          <p>Write text and check it for inconsistencies.</p>
+        </div>
+        <button className="btn btn-header-action" onClick={openStartupModal}>
+          New / Import Document
+        </button>
       </header>
 
       <main className="layout">
@@ -314,67 +187,46 @@ function App() {
           pages={pages}
           currentPageId={currentPageId}
           draggingPageId={draggingPageId}
-          rewritingPageIds={rewritingPageIds}
-          loadingAnim={loadingAnim}
-          intensity={intensity}
-          intensityToDuration={intensityToDuration}
+          issuesByPage={pendingCheck?.issuesByPage ?? null}
           registerPageRef={registerPageRef}
           dragMovedRef={dragMovedRef}
           onPageDragStart={startPageDrag}
           onSwitchPage={switchPage}
           onDeletePage={deletePage}
           onAddPage={addPage}
+          haloCuesEnabled={haloCuesEnabled}
         />
 
         <EditorPane
-          rewriteLoading={rewriteLoading}
-          loadingAnim={loadingAnim}
-          pendingRewrite={pendingRewrite}
-          scope={scope}
           currentPageId={currentPageId}
-          onAcceptRewrite={acceptRewrite}
-          onRejectRewrite={rejectRewrite}
-          isSearchMode={isSearchMode}
-          intensity={intensity}
-          intensityToDuration={intensityToDuration}
           currentPage={currentPage}
-          selectedIds={selectedIds}
-          onToggleWord={toggleWord}
           onChangeText={updateCurrentPageText}
-          rewriteError={rewriteError}
           selection={selection}
           onSelectionChange={setSelection}
-          refactorArmed={refactorArmed}
-          onCancelRefactor={cancelRefactorSelection}
-          refactorPrompt={refactorPrompt}
-          onSetRefactorPrompt={setRefactorPrompt}
-          pendingRefactor={pendingRefactor}
-          refactorLoading={refactorLoading}
-          refactorError={refactorError}
-          onRequestRefactor={submitRefactor}
-          onAcceptRefactor={acceptRefactor}
-          onRejectRefactor={rejectRefactor}
+          checkArmed={!!checkTool}
+          onCancelCheck={cancelCheckSelection}
+          pendingCheck={pendingCheck}
+          checkLoading={checkLoading}
+          checkError={checkError}
+          onRequestCheck={submitCheck}
+          onAcceptIssue={acceptIssue}
+          onDismissIssue={dismissIssue}
+          onAcceptAllCheck={acceptAllCheck}
+          onDismissAllCheck={dismissAllCheck}
+          haloCuesEnabled={haloCuesEnabled}
         />
 
         <ControlsPane
-          mode={mode}
-          onSwitchMode={switchMode}
           scope={scope}
           onSetScope={setScope}
-          intensity={intensity}
-          onSetIntensity={setIntensity}
-          isAnimationDisabled={isAnimationDisabled}
-          refactorArmed={refactorArmed}
-          refactorLoading={refactorLoading}
-          onToggleRefactorArm={toggleRefactorArm}
-          onTriggerAnimation={triggerAnimationAction}
-          onStartGifDrag={startGifDrag}
-          selectedIds={selectedIds}
-          onClearAnimations={clearAnimations}
+          checkTool={checkTool}
+          checkLoading={checkLoading}
+          onToggleCheckArm={toggleCheckArm}
+          haloCuesEnabled={haloCuesEnabled}
+          onToggleHaloCues={toggleHaloCues}
+          hasPendingCheck={!!pendingCheck}
         />
       </main>
-
-      <DragGhost dragState={dragState} />
     </div>
   );
 }

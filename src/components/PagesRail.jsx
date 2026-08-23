@@ -3,13 +3,19 @@ import PageThumbnail from "./PageThumbnail";
 import HaloRing from "./HaloRing";
 
 // Distance-to-ring-size scaling for the rail's own halo: the stack of page
-// thumbnails is treated as one continuous canvas, so a flagged page
+// thumbnails is treated as one continuous canvas, so a pinned page
 // scrolled out of the rail's own viewport gets a ring here exactly the way
-// an off-screen mark gets one in the editor — sized from real pixel
+// an off-screen pin gets one in the editor — sized from real pixel
 // distance in the rail's own scroll space, not confined to any one
 // thumbnail's boundary.
 function scaleRailDistance(px) {
   return Math.sqrt(Math.max(px, 0)) * 3;
+}
+
+function pageHasPin(pendingRewrite, pageId) {
+  if (!pendingRewrite) return false;
+  if (pendingRewrite.anchor.pageId === pageId) return true;
+  return (pendingRewrite.matchesByPage[pageId]?.length ?? 0) > 0;
 }
 
 // Left sidebar: list of page thumbnails (reorderable by drag) plus the
@@ -18,7 +24,11 @@ export default function PagesRail({
   pages,
   currentPageId,
   draggingPageId,
-  issuesByPage,
+  pendingRewrite,
+  pageStartOffsets,
+  totalDocLength,
+  trailDistanceMode,
+  timeDistanceMode,
   registerPageRef,
   dragMovedRef,
   onPageDragStart,
@@ -26,7 +36,11 @@ export default function PagesRail({
   onDeletePage,
   onAddPage,
   haloCuesEnabled,
+  onReportPins,
 }) {
+  // The off-screen halo cue is a pin-tool-only visualization — trail and
+  // time communicate distance by marker appearance alone.
+  const isDistanceKind = pendingRewrite && pendingRewrite.kind !== "pin";
   const scrollRef = useRef(null);
   const thumbRefs = useRef(new Map());
   const [railCues, setRailCues] = useState({
@@ -44,7 +58,7 @@ export default function PagesRail({
   }
 
   useLayoutEffect(() => {
-    if (!haloCuesEnabled || !issuesByPage) {
+    if (!haloCuesEnabled || !pendingRewrite || isDistanceKind) {
       setRailCues({
         up: 0,
         down: 0,
@@ -67,8 +81,7 @@ export default function PagesRail({
       let nearestDownDist = Infinity;
       let nearestDownId = null;
       pages.forEach((page) => {
-        const pageIssues = issuesByPage?.[page.id];
-        if (!pageIssues || pageIssues.length === 0) return;
+        if (!pageHasPin(pendingRewrite, page.id)) return;
         const el = thumbRefs.current.get(page.id);
         if (!el) return;
         const rect = el.getBoundingClientRect();
@@ -100,12 +113,14 @@ export default function PagesRail({
 
     recompute();
     scrollEl.addEventListener("scroll", recompute, { passive: true });
+    window.addEventListener("scroll", recompute, { passive: true });
     window.addEventListener("resize", recompute);
     return () => {
       scrollEl.removeEventListener("scroll", recompute);
+      window.removeEventListener("scroll", recompute);
       window.removeEventListener("resize", recompute);
     };
-  }, [haloCuesEnabled, issuesByPage, pages]);
+  }, [haloCuesEnabled, pendingRewrite, isDistanceKind, pages]);
 
   function jumpToPage(pageId) {
     if (!pageId) return;
@@ -127,8 +142,13 @@ export default function PagesRail({
               pageNumber={idx + 1}
               isActive={page.id === currentPageId}
               isDragging={draggingPageId === page.id}
-              issues={issuesByPage?.[page.id] ?? null}
+              pendingRewrite={pendingRewrite}
+              pageStartOffsets={pageStartOffsets}
+              totalDocLength={totalDocLength}
+              trailDistanceMode={trailDistanceMode}
+              timeDistanceMode={timeDistanceMode}
               haloCuesEnabled={haloCuesEnabled}
+              onReportPins={(pins) => onReportPins(`thumb:${page.id}`, pins)}
               innerRef={(el) => {
                 registerPageRef(page.id, el);
                 registerHaloThumbRef(page.id, el);
@@ -156,7 +176,7 @@ export default function PagesRail({
           x="50%"
           distance={scaleRailDistance(railCues.upDist)}
           count={railCues.up}
-          label={`${railCues.up} page${railCues.up > 1 ? "s" : ""} with flagged issues above — click to jump`}
+          label={`${railCues.up} page${railCues.up > 1 ? "s" : ""} with location pins above — click to jump`}
           onClick={() => jumpToPage(railCues.upPageId)}
         />
       )}
@@ -167,7 +187,7 @@ export default function PagesRail({
           x="50%"
           distance={scaleRailDistance(railCues.downDist)}
           count={railCues.down}
-          label={`${railCues.down} page${railCues.down > 1 ? "s" : ""} with flagged issues below — click to jump`}
+          label={`${railCues.down} page${railCues.down > 1 ? "s" : ""} with location pins below — click to jump`}
           onClick={() => jumpToPage(railCues.downPageId)}
         />
       )}

@@ -127,6 +127,12 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
+  /* Grid items default to min-height: auto, which refuses to shrink below
+     content size — with many thumbnails that would balloon this pane (and
+     the whole page along with it) instead of scrolling internally via
+     .pages-scroll. Without this the app stops being a fixed 100vh layout,
+     which is also what let the connecting line spill out past the rail. */
+  min-height: 0;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -230,7 +236,14 @@ body {
   color: var(--accent-hover);
 }
 
-.add-page-btn {
+button.add-page-btn {
+  /* Overrides btn-small's flex: 1 (element+class beats plain class so
+     this wins regardless of stylesheet order) — that rule is meant for
+     buttons sharing a row (e.g. Accept/Dismiss), but here it was fighting
+     .pages-scroll for space in the rail's column layout, ballooning this
+     button to ~half the rail's height instead of sitting as a
+     normal-sized button below the thumbnail list. */
+  flex: none;
   margin-top: 10px;
 }
 
@@ -265,8 +278,25 @@ body {
   color: var(--text-faint);
 }
 
-.editor-textarea-quill {
-  cursor: url("./assets/quill.png") 4 60, text;
+.editor-textarea-pin {
+  cursor:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36"><text x="0" y="28" font-size="30">📌</text></svg>')
+    4 30,
+    text;
+}
+
+.editor-textarea-trail {
+  cursor:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36"><text x="0" y="28" font-size="30">📍</text></svg>')
+    4 30,
+    text;
+}
+
+.editor-textarea-time {
+  cursor:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36"><text x="0" y="28" font-size="30">⏱️</text></svg>')
+    4 30,
+    text;
 }
 
 /* ---------- Controls pane (right) ---------- */
@@ -302,10 +332,8 @@ body {
 }
 
 .btn-animation-icon {
-  width: 56%;
-  height: 56%;
-  object-fit: contain;
-  display: block;
+  font-size: 40px;
+  line-height: 1;
   pointer-events: none;
 }
 
@@ -526,7 +554,23 @@ body {
   background: rgba(217, 119, 87, 0.18);
 }
 
-/* ---------- Consistency-check panel ---------- */
+.controls-row-tight {
+  margin-top: 8px;
+}
+
+.btn-mode-toggle.btn-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.btn-mode-toggle.btn-active:hover:not(:disabled) {
+  background: rgba(217, 119, 87, 0.18);
+}
+
+/* ---------- Location-rewrite panel ---------- */
 
 .rewrite-panel {
   height: 100%;
@@ -542,14 +586,129 @@ body {
   line-height: 1.7;
 }
 
-.inconsistency-highlight {
-  background: #fbe08b;
-  color: var(--text);
+/* A pinned word — the anchor or one of its matches — gets a 📌 sitting
+   right above it via ::before, so the marker reads as attached to that
+   exact word no matter how the surrounding text reflows or scrolls. */
+.location-pin {
+  position: relative;
   border-radius: 3px;
   padding: 1px 2px;
-  cursor: help;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+.location-pin::before {
+  content: "📌";
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.location-anchor {
+  background: var(--accent-soft);
+  color: var(--text);
+  outline: 1px dashed var(--accent);
+  cursor: text;
+}
+
+.location-anchor:focus {
+  outline: 2px solid var(--accent);
+  background: #fff;
+}
+
+.location-match {
+  background: #fbe08b;
+  color: var(--text);
+  cursor: help;
+}
+
+.page-thumb-issues .location-pin:not(.location-trail):not(.location-time)::before {
+  top: -9px;
+  font-size: 8px;
+}
+
+/* Trail-tool marker: 📍 instead of 📌, sized (and faded toward invisible)
+   entirely by --trail-size/--trail-opacity — set inline per-instance from
+   each marker's distance through the whole document from the anchor, so
+   this same rule works at both editor and thumbnail scale. */
+.location-pin.location-trail::before {
+  content: "📍";
+  font-size: var(--trail-size, 16px);
+  opacity: var(--trail-opacity, 1);
+  top: calc(-1 * var(--trail-size, 16px) * 0.9);
+  transition:
+    font-size 200ms ease-out,
+    opacity 200ms ease-out,
+    top 200ms ease-out;
+}
+
+.location-trail-anchor {
+  background: var(--accent-soft);
+  color: var(--text);
+  outline: 1px dashed var(--accent);
+  cursor: text;
+}
+
+.location-trail-anchor:focus {
+  outline: 2px solid var(--accent);
+  background: #fff;
+}
+
+.location-trail-match {
+  background: #d7e9fb;
+  color: var(--text);
+  cursor: help;
+}
+
+/* Time-tool marker: a small stopwatch dial instead of an emoji — a
+   conic-gradient pie fill (--time-fill, 0 empty at the anchor to 1 full at
+   maximum document distance) plus a tiny crown nub via ::after. Constant
+   size (--time-size) — this tool communicates distance by fill, not size. */
+.location-pin.location-time::before {
+  content: "";
+  width: var(--time-size, 16px);
+  height: var(--time-size, 16px);
+  top: calc(-1 * var(--time-size, 16px) * 0.9);
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--time-fill, 0) * 360deg), var(--bg-panel) 0);
+  border: 1.5px solid var(--accent);
+  box-sizing: border-box;
+  transition: background 200ms ease-out;
+}
+
+.location-pin.location-time::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  top: calc(-1 * var(--time-size, 16px) * 0.9 - 3px);
+  transform: translateX(-50%);
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.location-time-anchor {
+  background: var(--accent-soft);
+  color: var(--text);
+  outline: 1px dashed var(--accent);
+  cursor: text;
+}
+
+.location-time-anchor:focus {
+  outline: 2px solid var(--accent);
+  background: #fff;
+}
+
+.location-time-match {
+  background: #f6e3b8;
+  color: var(--text);
+  cursor: help;
 }
 
 .rewrite-actions {
@@ -650,40 +809,56 @@ body {
   }
 }
 
-/* Once a flagged word scrolls into view, its edge cue settles into a ring
-   drawn directly around the word itself, and it stays there — at a fixed
-   size, no longer distance-scaled — until the issue is accepted or
-   dismissed. */
-.halo-word-ring {
-  box-shadow:
-    0 0 0 2px var(--accent),
-    0 0 0 5px var(--accent-soft);
-  animation: halo-word-settle 200ms ease-out both;
+/* ---------- Location connecting line ---------- */
+/* A single full-viewport overlay so the line can run from the anchor,
+   across the gap between panes, straight into a page thumbnail over in
+   the rail — the whole app reads as one continuous canvas for it. */
+
+.location-lines {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 8;
 }
 
-@keyframes halo-word-settle {
-  from {
-    box-shadow:
-      0 0 0 0 var(--accent),
-      0 0 0 0 var(--accent-soft);
-  }
-  to {
-    box-shadow:
-      0 0 0 2px var(--accent),
-      0 0 0 5px var(--accent-soft);
-  }
+.location-line {
+  stroke: #d94747;
+  stroke-width: 1.5;
+  stroke-opacity: 0.45;
+  transition:
+    x1 150ms ease-out,
+    y1 150ms ease-out,
+    x2 150ms ease-out,
+    y2 150ms ease-out;
 }
 
-.page-thumb-issues .halo-word-ring {
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 0 0 2px var(--accent-soft);
+/* The trail (and time) tool's traveling marker: eases from stop to stop
+   (DistanceMarkerAnimator drives position/size via inline style), then
+   fades out once it's visited every match. */
+.trail-marker {
+  position: fixed;
+  z-index: 9;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  line-height: 1;
+  transition:
+    left 650ms ease-in-out,
+    top 650ms ease-in-out,
+    font-size 650ms ease-in-out,
+    width 650ms ease-in-out,
+    height 650ms ease-in-out,
+    opacity 450ms ease-in-out;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .halo-word-ring {
-    animation: none;
-  }
+/* The time tool's traveling/scroll-linked marker: same floating dial as
+   the static per-word ones, just untethered from any particular word. */
+.trail-marker.time-marker {
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--time-fill, 0) * 360deg), var(--bg-panel) 0);
+  border: 2px solid var(--accent);
+  box-sizing: border-box;
 }
 
 .btn-halo.btn-active {
